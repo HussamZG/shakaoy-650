@@ -18,7 +18,8 @@ const AdminComplaintDetails = () => {
     complaints, 
     updateComplaintStatus, 
     fetchComplaintDetails,
-    getStatusText 
+    getStatusText,
+    addComplaintMessage
   } = useComplaints();
   
   const [complaint, setComplaint] = useState(null);
@@ -30,7 +31,7 @@ const AdminComplaintDetails = () => {
   const [newStatus, setNewStatus] = useState('');
   const [statusNote, setStatusNote] = useState('');
 
-  // دوال وحدات التحميل والتفاعل
+  // تأثير لتحميل تفاصيل الشكوى والرسائل
   useEffect(() => {
     const loadComplaintDetails = async () => {
       // محاولة جلب الشكوى من Context أولاً
@@ -38,32 +39,62 @@ const AdminComplaintDetails = () => {
       
       if (existingComplaint) {
         setComplaint(existingComplaint);
+        setMessages(existingComplaint.complaint_messages || []);
+        setActionLogs(existingComplaint.complaint_action_logs || []);
+        setLoading(false);
       } else {
-        // إذا لم يكن موجوداً، جلبه من Supabase
-        const fetchedComplaint = await fetchComplaintDetails(complaintId);
-        if (fetchedComplaint) {
-          setComplaint(fetchedComplaint);
+        // جلب تفاصيل الشكوى إذا لم تكن موجودة
+        const details = await fetchComplaintDetails(complaintId);
+        
+        if (details) {
+          setComplaint(details);
+          setMessages(details.complaint_messages || []);
+          setActionLogs(details.complaint_action_logs || []);
         }
+        
+        setLoading(false);
       }
-
-      // جلب الرسائل
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('complaint_messages')
-        .select('*')
-        .eq('complaint_id', complaintId)
-        .order('timestamp', { ascending: true });
-
-      if (messagesError) {
-        toast.error('خطأ في جلب الرسائل');
-      } else {
-        setMessages(messagesData || []);
-      }
-
-      setLoading(false);
     };
 
     loadComplaintDetails();
-  }, [complaintId, complaints]);
+  }, [complaintId, complaints, fetchComplaintDetails]);
+
+  // تأثير للاشتراك في التحديثات Realtime للرسائل
+  useEffect(() => {
+    // إنشاء قناة Realtime للرسائل
+    const messagesChannel = supabase
+      .channel(`complaint_messages_${complaintId}`)
+      .on(
+        'postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'complaint_messages',
+          filter: `complaint_id=eq.${complaintId}`
+        },
+        (payload) => {
+          // إضافة الرسالة الجديدة إلى القائمة
+          setMessages(prevMessages => {
+            // التأكد من عدم تكرار الرسالة
+            const isMessageExists = prevMessages.some(
+              msg => msg.id === payload.new.id
+            );
+
+            if (!isMessageExists) {
+              return [...prevMessages, payload.new];
+            }
+            
+            return prevMessages;
+          });
+        }
+      )
+      .subscribe();
+
+    // تنظيف الاشتراك عند إغلاق المكون
+    return () => {
+      messagesChannel.unsubscribe();
+    };
+  }, [complaintId]);
 
   const handleUpdateStatus = async () => {
     if (!newStatus) {
@@ -140,6 +171,7 @@ const AdminComplaintDetails = () => {
     }
   };
 
+  // دالة إرسال رسالة
   const sendMessage = async () => {
     if (!newMessage.trim()) {
       toast.error('لا يمكن إرسال رسالة فارغة');
@@ -147,25 +179,24 @@ const AdminComplaintDetails = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('complaint_messages')
-        .insert({
-          complaint_id: complaint.id,
-          text: newMessage,
-          sender: 'admin',
-          timestamp: new Date().toISOString()
-        });
+      // استخدام الدالة من ComplaintContext
+      const result = await addComplaintMessage(
+        complaintId, 
+        newMessage,  // إرسال الرسالة مباشرة
+        'admin'  // معرف المرسل
+      );
 
-      if (error) {
-        toast.error('خطأ في إرسال الرسالة');
-        return;
+      if (result) {
+        // مسح حقل الرسالة الجديدة
+        setNewMessage('');
+
+        // عرض رسالة نجاح
+        toast.success('تم إرسال الرسالة بنجاح');
+      } else {
+        toast.error('فشل إرسال الرسالة');
       }
-
-      await fetchComplaintDetails();
-      setNewMessage('');
-      toast.success('تم إرسال الرسالة بنجاح');
     } catch (err) {
-      console.error('Unexpected send message error:', err);
+      console.error('Unexpected error sending message:', err);
       toast.error('حدث خطأ غير متوقع');
     }
   };
@@ -234,17 +265,7 @@ const AdminComplaintDetails = () => {
               <p className="text-sm text-gray-500">رقم الشكوى</p>
               <p className="font-semibold text-gray-800">{complaint.id}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">الحالة</p>
-              <p className={`font-semibold ${
-                complaint.status === 'pending' ? 'text-yellow-600' :
-                complaint.status === 'in_progress' ? 'text-blue-600' :
-                complaint.status === 'resolved' ? 'text-green-600' :
-                'text-red-600'
-              }`}>
-                {getStatusText(complaint.status)}
-              </p>
-            </div>
+
 
             {/* عرض المرفق إن وجد */}
             {complaint.attachment && (
@@ -358,94 +379,9 @@ const AdminComplaintDetails = () => {
             </div>
           </div>
 
-          {/* قسم سجل الإجراءات */}
-          <div className="p-6 bg-gray-50">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">سجل الإجراءات</h2>
-            
-            {actionLogs.length === 0 ? (
-              <div className="text-center text-gray-500 py-4">
-                لا توجد إجراءات حتى الآن
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {actionLogs.map((log) => (
-                  <div 
-                    key={log.id} 
-                    className="p-4 rounded-lg max-w-md bg-gray-200 text-gray-900"
-                  >
-                    <p>{log.details}</p>
-                    <p className="text-xs text-gray-600 mt-1 text-left">
-                      {new Date(log.timestamp).toLocaleString('ar-EG', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                    {log.notes && (
-                      <p className="text-xs text-gray-600 mt-1 text-left">
-                        ملاحظات: {log.notes}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* قسم تحديث حالة الشكوى */}
-          <div className="p-6 bg-gray-50">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">تحديث حالة الشكوى</h2>
-            
-            <button
-              onClick={() => setShowStatusModal(true)}
-              className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              تحديث حالة الشكوى
-            </button>
 
-            {showStatusModal && (
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center">
-                <div className="bg-white rounded-lg p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4">تحديث حالة الشكوى</h2>
-                  
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    className="block w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">اختر الحالة الجديدة</option>
-                    <option value="pending">قيد الانتظار</option>
-                    <option value="in_progress">قيد المعالجة</option>
-                    <option value="resolved">تم الحل</option>
-                    <option value="closed">مغلقة</option>
-                  </select>
-
-                  <textarea
-                    value={statusNote}
-                    onChange={(e) => setStatusNote(e.target.value)}
-                    placeholder="اكتب ملاحظاتك..."
-                    className="block w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mt-4"
-                  />
-
-                  <button
-                    onClick={handleUpdateStatus}
-                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors mt-4"
-                  >
-                    تحديث حالة الشكوى
-                  </button>
-
-                  <button
-                    onClick={() => setShowStatusModal(false)}
-                    className="bg-gray-200 text-gray-800 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors mt-4"
-                  >
-                    إلغاء
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+         
         </div>
       </div>
     </div>

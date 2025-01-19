@@ -99,12 +99,23 @@ const Header = () => {
                 >
                   لوحة التحكم
                 </Link>
-                <button
-                  onClick={handleLogout}
-                  className="px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50"
-                >
-                  تسجيل خروج
-                </button>
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <button
+                    onClick={() => {
+                      // يمكنك تنفيذ المنطق الخاص بجلب الشكاوى الجديدة هنا
+                      toast.success('تم جلب الشكاوى الجديدة');
+                    }}
+                    className="px-3 py-2 rounded-md text-sm font-medium text-green-600 hover:bg-green-50"
+                  >
+                    جلب الشكاوى
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    تسجيل خروج
+                  </button>
+                </div>
               </>
             ) : (
               <Link
@@ -193,15 +204,27 @@ const Header = () => {
                   >
                     لوحة التحكم
                   </Link>
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setIsMenuOpen(false);
-                    }}
-                    className="block w-full text-right px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50"
-                  >
-                    تسجيل خروج
-                  </button>
+                  <div className="flex items-center space-x-2 space-x-reverse">
+                    <button
+                      onClick={() => {
+                        // يمكنك تنفيذ المنطق الخاص بجلب الشكاوى الجديدة هنا
+                        toast.success('تم جلب الشكاوى الجديدة');
+                      }}
+                      className="block w-full text-right px-3 py-2 rounded-md text-base font-medium text-green-600 hover:bg-green-50"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      جلب الشكاوى
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsMenuOpen(false);
+                      }}
+                      className="block w-full text-right px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50"
+                    >
+                      تسجيل خروج
+                    </button>
+                  </div>
                 </>
               ) : (
                 <Link

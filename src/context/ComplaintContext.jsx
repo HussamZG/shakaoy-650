@@ -15,6 +15,7 @@ const ComplaintContext = createContext();
 export const ComplaintProvider = ({ children }) => {
   const [complaints, setComplaints] = useState({});
   const [complaintsSubscription, setComplaintsSubscription] = useState(null);
+  const [messagesSubscription, setMessagesSubscription] = useState(null);
 
   // دالة تشغيل الاشتراك Realtime
   const setupRealTimeSubscription = () => {
@@ -43,14 +44,62 @@ export const ComplaintProvider = ({ children }) => {
     setComplaintsSubscription(subscription);
   };
 
-  // تأثير لإعداد الاشتراك Realtime
+  // دالة تشغيل الاشتراك Realtime للرسائل
+  const setupRealTimeMessageSubscription = () => {
+    // إلغاء الاشتراك السابق إن وجد
+    if (messagesSubscription) {
+      messagesSubscription.unsubscribe();
+    }
+
+    // اشتراك جديد للتحديثات
+    const subscription = supabase
+      .channel('complaint_messages')
+      .on(
+        'postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'complaint_messages' },
+        (payload) => {
+          // تحديث الرسائل في الشكوى المحلية
+          setComplaints(prev => {
+            const complaintId = payload.new.complaint_id;
+            const existingComplaint = prev[complaintId];
+            
+            if (existingComplaint) {
+              const updatedMessages = [
+                ...(existingComplaint.complaint_messages || []),
+                payload.new
+              ];
+
+              return {
+                ...prev,
+                [complaintId]: {
+                  ...existingComplaint,
+                  complaint_messages: updatedMessages
+                }
+              };
+            }
+            
+            return prev;
+          });
+        }
+      )
+      .subscribe();
+
+    // حفظ الاشتراك
+    setMessagesSubscription(subscription);
+  };
+
+  // تأثير لإعداد الاشتراكات Realtime
   useEffect(() => {
     setupRealTimeSubscription();
+    setupRealTimeMessageSubscription();
 
-    // تنظيف الاشتراك عند إغلاق المكون
+    // تنظيف الاشتراكات عند إغلاق المكون
     return () => {
       if (complaintsSubscription) {
         complaintsSubscription.unsubscribe();
+      }
+      if (messagesSubscription) {
+        messagesSubscription.unsubscribe();
       }
     };
   }, []);
@@ -185,39 +234,24 @@ export const ComplaintProvider = ({ children }) => {
   };
 
   // دالة لإضافة رسالة للشكوى
-  const addComplaintMessage = async (complaintId, message, userId) => {
+  const addComplaintMessage = async (complaintId, text, sender) => {
     try {
       const { data, error } = await supabase
         .from('complaint_messages')
         .insert({
           complaint_id: complaintId,
-          message: message,
-          user_id: userId,
+          text: text,  
+          sender: sender,  
           timestamp: new Date().toISOString()
         })
         .select('*')
         .single();
 
       if (error) {
-        toast.error('فشل إرسال الرسالة');
         console.error('Message Send Error:', error);
+        toast.error('خطأ في إرسال الرسالة');
         return null;
       }
-
-      // تحديث الشكوى في Context
-      setComplaints(prev => {
-        const updatedComplaint = prev[complaintId] || {};
-        return {
-          ...prev,
-          [complaintId]: {
-            ...updatedComplaint,
-            complaint_messages: [
-              ...(updatedComplaint.complaint_messages || []),
-              data
-            ]
-          }
-        };
-      });
 
       return data;
     } catch (err) {
