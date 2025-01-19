@@ -1,8 +1,46 @@
-# React + Vite
+# Shakaoy - نظام إدارة الشكاوى المتقدم
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## وصف المشروع
+نظام إدارة شكاوى متكامل يوفر واجهة سلسة للمستخدمين والمسؤولين لتتبع وحل الشكاوى بكفاءة.
 
-Currently, two official plugins are available:
+## المميزات الرئيسية
+- نظام رسائل فوري
+- لوحة تحكم للمسؤولين
+- تحديث حالة الشكاوى في الوقت الفعلي
+- واجهة مستخدم سهلة الاستخدام
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## التقنيات المستخدمة
+- React.js
+- Supabase
+- Tailwind CSS
+- React Router
+
+## متطلبات التشغيل
+- Node.js
+- npm أو yarn
+
+## التثبيت
+1. استنساخ المستودع
+```bash
+git clone https://github.com/shakaoy/Shakaoy.git
+```
+
+2. تثبيت التبعيات
+```bash
+npm install
+```
+
+3. إعداد المتغيرات البيئية
+- أنشئ ملف `.env`
+- أضف متغيرات Supabase الخاصة بك
+
+## التشغيل
+```bash
+npm run dev
+```
+
+## المساهمة
+مرحبًا بالمساهمات! يرجى فتح issue أو pull request.
+
+## الترخيص
+[حدد الترخيص]
