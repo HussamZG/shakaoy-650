@@ -12,6 +12,7 @@ const supabase = createClient(
 const SubmitComplaint = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     category: '',
@@ -29,6 +30,8 @@ const SubmitComplaint = () => {
       return;
     }
 
+    setIsLoading(true);
+
     try {
       const complaintId = Math.random().toString(36).substr(2, 9);
       
@@ -41,7 +44,7 @@ const SubmitComplaint = () => {
         priority: formData.priority,
         status: 'pending', // تأكيد الحالة الافتراضية
         date: new Date().toISOString(),
-        attachment: attachmentUrl
+        attachment: null // Initialize attachment as null
       };
 
       // Upload attachment if exists
@@ -54,19 +57,17 @@ const SubmitComplaint = () => {
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
         if (!allowedTypes.includes(formData.attachment.type)) {
           toast.error('نوع الملف غير مسموح. يرجى رفع صور (JPG, PNG, GIF) أو PDF');
+          setIsLoading(false);
           return;
         }
 
         if (formData.attachment.size > 5 * 1024 * 1024) {
           toast.error('الحد الأقصى لحجم الملف 5 ميجابايت');
+          setIsLoading(false);
           return;
         }
 
         try {
-          // إنشاء FormData للرفع
-          const formDataUpload = new FormData();
-          formDataUpload.append('file', formData.attachment, fileName);
-
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from('complaint-attachments')
             .upload(fileName, formData.attachment, {
@@ -87,6 +88,7 @@ const SubmitComplaint = () => {
             } else {
               toast.error(`فشل رفع المرفق: ${uploadError.message}`);
             }
+            setIsLoading(false);
             return;
           }
 
@@ -95,10 +97,12 @@ const SubmitComplaint = () => {
             .getPublicUrl(fileName);
           
           attachmentUrl = publicUrl;
-          complaint.attachment = attachmentUrl;
+          complaint.attachment = attachmentUrl; // Update attachment URL
         } catch (err) {
           console.error('Unexpected Storage Error:', err);
           toast.error('حدث خطأ غير متوقع في التخزين');
+          setIsLoading(false);
+          return;
         }
       }
 
@@ -111,6 +115,7 @@ const SubmitComplaint = () => {
       if (error) {
         toast.error('فشل تقديم الشكوى');
         console.error('Supabase Error:', error);
+        setIsLoading(false);
         return;
       }
 
@@ -129,6 +134,8 @@ const SubmitComplaint = () => {
     } catch (err) {
       toast.error('حدث خطأ غير متوقع');
       console.error('Submission Error:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -338,9 +345,18 @@ const SubmitComplaint = () => {
             <div className="pt-4">
               <button
                 type="submit"
-                className="w-full py-3 px-6 border border-transparent rounded-xl shadow-lg text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300"
+                disabled={isLoading}
+                className={`w-full py-3 px-6 border border-transparent rounded-xl shadow-lg text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300 ${
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                تقديم الشكوى
+                {isLoading ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  'تقديم الشكوى'
+                )}
               </button>
             </div>
           </form>
